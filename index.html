@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Production Video Wall · YouTube IFrame API</title>
+  <!-- Single API load, lazy loading via iframe attributes -->
+  <style>
+    /* ---------- GLOBAL RESET / DESIGN TOKENS ---------- */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1e;
+      --surface-2: #26262c;
+      --border: #2e2e36;
+      --text: #f0f0f5;
+      --text-muted: #a0a0b0;
+      --accent: #ff3e3e;
+      --accent-hover: #ff5e5e;
+      --focus-ring: 0 0 0 3px rgba(255, 62, 62, 0.5);
+      --radius: 12px;
+      --shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      --font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      padding: 1.5rem;
+      line-height: 1.5;
+    }
+
+    /* ---------- LAYOUT ---------- */
+    .app {
+      max-width: 1600px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    h1 span {
+      background: var(--accent);
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.2rem 0.7rem;
+      border-radius: 100px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    /* ---------- CONTROLS ---------- */
+    .controls {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: flex-end;
+      box-shadow: var(--shadow);
+    }
+
+    .input-group {
+      flex: 1 1 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .input-group label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+    }
+
+    .input-group input {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      font-size: 0.95rem;
+      color: var(--text);
+      font-family: var(--font);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+
+    .input-group input:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: var(--focus-ring);
+    }
+
+    .input-group input::placeholder {
+      color: #6a6a7a;
+    }
+
+    .input-group input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    button {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.75rem 1.4rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      min-height: 44px;
+      user-select: none;
+    }
+
+    button:hover:not(:disabled) {
+      background: #32323a;
+      border-color: #3e3e48;
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    button:focus-visible {
+      outline: none;
+      box-shadow: var(--focus-ring);
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    button.toggle-active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    button.toggle-active:hover:not(:disabled) {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    /* ---------- TOAST / STATUS ---------- */
+    .toast-region {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      pointer-events: none;
+      max-width: 380px;
+    }
+
+    .toast {
+      background: #2a2a32;
+      color: var(--text);
+      padding: 0.9rem 1.2rem;
+      border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+      border-left: 4px solid var(--accent);
+      font-size: 0.9rem;
+      line-height: 1.4;
+      pointer-events: auto;
+      animation: slideIn 0.25s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      word-break: break-word;
+    }
+
+    .toast.success { border-left-color: #4caf50; }
+    .toast.error { border-left-color: #f44336; }
+    .toast.info { border-left-color: #2196f3; }
+
+    @keyframes slideIn {
+      from { transform: translateX(24px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* ---------- VIDEO GRID ---------- */
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+      gap: 1.25rem;
+      min-height: 200px;
+    }
+
+    /* card */
+    .video-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      transition: border-color 0.2s, transform 0.2s;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .video-card:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent), var(--shadow);
+    }
+
+    .video-card:hover {
+      border-color: #3e3e4a;
+    }
+
+    .iframe-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      overflow: hidden;
+    }
+
+    .iframe-container iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    .card-footer {
+      padding: 0.8rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      background: var(--surface-2);
+      border-top: 1px solid var(--border);
+    }
+
+    .video-id {
+      font-size: 0.8rem;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 60%;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .card-actions button {
+      padding: 0.4rem 0.9rem;
+      font-size: 0.8rem;
+      min-height: 34px;
+      border-radius: 6px;
+    }
+
+    /* ---------- EMPTY STATE ---------- */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 3rem 1.5rem;
+      color: var(--text-muted);
+      background: var(--surface);
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      font-size: 1rem;
+    }
+
+    .empty-state strong {
+      color: var(--text);
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 1.2rem;
+    }
+
+    /* ---------- RESPONSIVE TWEAKS ---------- */
+    @media (max-width: 700px) {
+      body { padding: 1rem; }
+      .controls { flex-direction: column; align-items: stretch; }
+      .input-group { flex: 1 1 auto; }
+      .actions { justify-content: stretch; }
+      .actions button { flex: 1; }
+      h1 { font-size: 1.4rem; }
+      .toast-region { left: 1rem; right: 1rem; max-width: none; bottom: 1rem; }
+    }
+
+    /* accessibility: reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>
+        🎬 Video Wall
+        <span>IFrame API</span>
+      </h1>
+    </header>
+
+    <!-- controls -->
+    <section class="controls" aria-label="Video wall controls">
+      <div class="input-group">
+        <label for="urlInput">YouTube URLs <span style="font-weight:400; text-transform:none;">(one per line, or comma-separated)</span></label>
+        <input
+          type="text"
+          id="urlInput"
+          placeholder="https://youtu.be/dQw4w9WgXcQ&#10;https://www.youtube.com/watch?v=9bZkp7q19f0&t=30s"
+          autocomplete="off"
+          spellcheck="false"
+          aria-describedby="urlHelp"
+        />
+      </div>
+      <div class="actions">
+        <button id="addBtn" class="primary" aria-label="Add videos from input">➕ Add videos</button>
+        <button id="syncPlayBtn" aria-label="Synchronize playback">▶️ Sync play</button>
+        <button id="muteAllBtn" aria-label="Toggle mute on all videos">🔇 Mute all</button>
+        <button id="clearAllBtn" aria-label="Remove all videos">🗑️ Clear all</button>
+      </div>
+    </section>
+
+    <!-- live region for status announcements -->
+    <div id="ariaLive" class="visually-hidden" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;"></div>
+
+    <!-- toast container -->
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="false"></div>
+
+    <!-- video grid -->
+    <div class="video-grid" id="videoGrid" role="list" aria-label="Video wall">
+      <!-- dynamically populated -->
+    </div>
+  </div>
+
+  <!-- ========== YOUTUBE IFRAME API (single load) ========== -->
+  <script>
+    // ---------------------------------------------------------------
+    // 1. GLOBAL STATE & CONSTANTS
+    // ---------------------------------------------------------------
+    const STORAGE_KEY = 'yt-video-wall-v1';
+    let players = new Map();          // videoId -> YT.Player instance
+    let videoIds = [];               // ordered list of current video IDs
+    let isMutedAll = false;
+    let lastToastId = 0;
+
+    // ---------------------------------------------------------------
+    // 2. UTILITY: TOAST / ANNOUNCE
+    // ---------------------------------------------------------------
+    function showToast(message, type = 'info', duration = 3500) {
+      const region = document.getElementById('toastRegion');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+      toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${escapeHtml(message)}</span>`;
+      toast.setAttribute('role', 'status');
+      region.appendChild(toast);
+
+      // announce for screen readers
+      document.getElementById('ariaLive').textContent = message;
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(12px)';
+        toast.style.transition = 'opacity 0.25s, transform 0.25s';
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---------------------------------------------------------------
+    // 3. URL PARSER (robust)
+    // ---------------------------------------------------------------
+    function parseYouTubeUrl(url) {
+      if (!url || typeof url !== 'string') return null;
+      let trimmed = url.trim();
+      if (!trimmed) return null;
+
+      // add protocol if missing
+      if (!/^https?:\/\//i.test(trimmed)) {
+        trimmed = 'https://' + trimmed;
+      }
+
+      try {
+        const urlObj = new URL(trimmed);
+        const hostname = urlObj.hostname.replace('www.', '');
+        let videoId = null;
+        let startTime = 0;
+
+        // --- youtu.be/<id> ---
+        if (hostname === 'youtu.be') {
+          videoId = urlObj.pathname.slice(1).split('/')[0];
+        }
+        // --- youtube.com ---
+        else if (hostname === 'youtube.com' || hostname === 'm.youtube.com') {
+          // /watch?v=<id>
+          if (urlObj.pathname === '/watch') {
+            videoId = urlObj.searchParams.get('v');
+          }
+          // /shorts/<id>
+          else if (urlObj.pathname.startsWith('/shorts/')) {
+            videoId = urlObj.pathname.split('/')[2];
+          }
+          // /embed/<id>
+          else if (urlObj.pathname.startsWith('/embed/')) {
+            videoId = urlObj.pathname.split('/')[2];
+          }
+          // /live/<id>
+          else if (urlObj.pathname.startsWith('/live/')) {
+            videoId = urlObj.pathname.split('/')[2];
+          }
+          // /v/<id> (legacy)
+          else if (urlObj.pathname.startsWith('/v/')) {
+            videoId = urlObj.pathname.split('/')[2];
+          }
+        }
+
+        if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return null;
+
+        // parse timestamps: t=30, t=30s, t=1m30s, start=30
+        let tParam = urlObj.searchParams.get('t') || urlObj.searchParams.get('start');
+        if (tParam) {
+          const seconds = parseTimestamp(tParam);
+          if (!isNaN(seconds)) startTime = seconds;
+        }
+
+        return { videoId, startTime };
+      } catch {
+        return null;
+      }
+    }
+
+    function parseTimestamp(t) {
+      t = t.trim().toLowerCase();
+      // pure number
+      if (/^\d+$/.test(t)) return parseInt(t, 10);
+      // 1h2m3s, 2m30s, 45s
+      const match = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+      if (!match) return 0;
+      const hours = parseInt(match[1] || 0, 10);
+      const minutes = parseInt(match[2] || 0, 10);
+      const seconds = parseInt(match[3] || 0, 10);
+      return hours * 3600 + minutes * 60 + seconds;
+    }
+
+    // ---------------------------------------------------------------
+    // 4. PERSISTENCE
+    // ---------------------------------------------------------------
+    function saveState() {
+      try {
+        const state = { videoIds: [...videoIds], isMutedAll };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch { /* ignore */ }
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.videoIds)) {
+          return {
+            videoIds: parsed.videoIds.filter(id => /^[a-zA-Z0-9_-]{11}$/.test(id)),
+            isMutedAll: !!parsed.isMutedAll
+          };
+        }
+      } catch { /* ignore */ }
+      return null;
+    }
+
+    // ---------------------------------------------------------------
+    // 5. GRID RENDERING (DOM)
+    // ---------------------------------------------------------------
+    const videoGrid = document.getElementById('videoGrid');
+    const urlInput = document.getElementById('urlInput');
+    const addBtn = document.getElementById('addBtn');
+    const syncPlayBtn = document.getElementById('syncPlayBtn');
+    const muteAllBtn = document.getElementById('muteAllBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+
+    function renderGrid() {
+      // destroy old players
+      players.forEach(p => {
+        try { p.destroy(); } catch { /* ignore */ }
+      });
+      players.clear();
+
+      // build DOM
+      videoGrid.innerHTML = '';
+      if (videoIds.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.innerHTML = '<strong>No videos yet</strong>Paste YouTube links above and click “Add videos”.';
+        videoGrid.appendChild(empty);
+        updateButtonStates();
+        return;
+      }
+
+      videoIds.forEach((vid, index) => {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.setAttribute('role', 'listitem');
+
+        // iframe container
+        const iframeContainer = document.createElement('div');
+        iframeContainer.className = 'iframe-container';
+
+        const iframe = document.createElement('iframe');
+        const origin = window.location.origin;
+        iframe.src = `https://www.youtube.com/embed/${vid}?enablejsapi=1&origin=${encodeURIComponent(origin)}&rel=0&modestbranding=1&playsinline=1&color=white&fs=1&iv_load_policy=3`;
+        iframe.setAttribute('loading', 'lazy');
+        iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+        iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+        iframe.setAttribute('allowfullscreen', '');
+        iframe.setAttribute('title', `YouTube video ${vid}`);
+        iframe.id = `yt-iframe-${vid}-${index}`;
+
+        iframeContainer.appendChild(iframe);
+        card.appendChild(iframeContainer);
+
+        // footer with ID and actions
+        const footer = document.createElement('div');
+        footer.className = 'card-footer';
+
+        const idSpan = document.createElement('span');
+        idSpan.className = 'video-id';
+        idSpan.textContent = vid;
+        idSpan.title = vid;
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'card-actions';
+
+        const playPauseBtn = document.createElement('button');
+        playPauseBtn.textContent = '▶️';
+        playPauseBtn.setAttribute('aria-label', `Play/Pause video ${vid}`);
+        playPauseBtn.dataset.action = 'toggle-play';
+        playPauseBtn.dataset.videoId = vid;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '✕';
+        removeBtn.setAttribute('aria-label', `Remove video ${vid}`);
+        removeBtn.dataset.action = 'remove';
+        removeBtn.dataset.videoId = vid;
+
+        actionsDiv.appendChild(playPauseBtn);
+        actionsDiv.appendChild(removeBtn);
+        footer.appendChild(idSpan);
+        footer.appendChild(actionsDiv);
+        card.appendChild(footer);
+
+        videoGrid.appendChild(card);
+
+        // create player instance after a small delay to ensure iframe is in DOM
+        // we'll use the YouTube API's ready event
+        createPlayerForIframe(iframe, vid, index);
+      });
+
+      updateButtonStates();
+    }
+
+    // ---------------------------------------------------------------
+    // 6. YOUTUBE PLAYER CREATION & MANAGEMENT
+    // ---------------------------------------------------------------
+    function createPlayerForIframe(iframe, videoId, index) {
+      // ensure API is ready
+      if (!window.YT || !window.YT.Player) {
+        // fallback: wait a bit and retry
+        setTimeout(() => createPlayerForIframe(iframe, videoId, index), 300);
+        return;
+      }
+
+      try {
+        const player = new YT.Player(iframe, {
+          events: {
+            onReady: (event) => {
+              // store player reference keyed by videoId (only one instance per ID in our model)
+              // but multiple same IDs could exist – we use composite key? we assume unique IDs, but just in case
+              // we store in map with videoId; if duplicate, the later overrides — acceptable.
+              players.set(videoId, event.target);
+              // apply initial mute state
+              if (isMutedAll) {
+                event.target.mute();
+              } else {
+                event.target.unMute();
+              }
+              // apply start time if provided (only on first add – we don't store it here)
+              // we don't have startTime stored in videoIds array; we could store but for simplicity we ignore.
+            },
+            onError: (event) => {
+              console.warn('YouTube player error', event.data, videoId);
+              showToast(`Video ${videoId} could not be loaded (error ${event.data})`, 'error');
+            }
+          }
+        });
+      } catch (e) {
+        console.warn('Failed to create player', e);
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // 7. CORE ACTIONS (add, remove, toggle, sync, mute, clear)
+    // ---------------------------------------------------------------
+    function addVideosFromInput() {
+      const raw = urlInput.value.trim();
+      if (!raw) {
+        showToast('Please enter at least one YouTube URL.', 'error');
+        return;
+      }
+
+      // split by newline or comma (with optional spaces)
+      const parts = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      const parsedList = [];
+      const errors = [];
+
+      parts.forEach(part => {
+        const parsed = parseYouTubeUrl(part);
+        if (parsed) {
+          parsedList.push(parsed);
+        } else {
+          errors.push(part);
+        }
+      });
+
+      if (parsedList.length === 0) {
+        showToast('No valid YouTube URLs found. Check the format.', 'error');
+        return;
+      }
+
+      let addedCount = 0;
+      parsedList.forEach(({ videoId }) => {
+        if (!videoIds.includes(videoId)) {
+          videoIds.push(videoId);
+          addedCount++;
+        }
+      });
+
+      if (addedCount === 0) {
+        showToast('All videos already in the wall.', 'info');
+        return;
+      }
+
+      // clear input after successful add
+      urlInput.value = '';
+
+      renderGrid();
+      saveState();
+      showToast(`Added ${addedCount} video(s).${errors.length ? ` ${errors.length} invalid URL(s) skipped.` : ''}`, 'success');
+    }
+
+    function removeVideo(videoId) {
+      const index = videoIds.indexOf(videoId);
+      if (index === -1) return;
+
+      // destroy player
+      const player = players.get(videoId);
+      if (player) {
+        try { player.destroy(); } catch { /* ignore */ }
+        players.delete(videoId);
+      }
+
+      videoIds.splice(index, 1);
+      renderGrid();
+      saveState();
+      showToast(`Removed video ${videoId}`, 'info');
+    }
+
+    function togglePlayPause(videoId) {
+      const player = players.get(videoId);
+      if (!player) {
+        showToast('Player not ready yet. Try again.', 'error');
+        return;
+      }
+      try {
+        const state = player.getPlayerState();
+        // 1 = playing, 2 = paused, 0 = ended, 5 = cued
+        if (state === 1) {
+          player.pauseVideo();
+        } else {
+          player.playVideo();
+        }
+      } catch (e) {
+        showToast('Cannot control player.', 'error');
+      }
+    }
+
+    function syncPlayAll() {
+      if (players.size === 0) {
+        showToast('No videos to sync.', 'info');
+        return;
+      }
+      let count = 0;
+      players.forEach((player, vid) => {
+        try {
+          player.seekTo(0, true);
+          player.playVideo();
+          count++;
+        } catch { /* ignore */ }
+      });
+      if (count > 0) {
+        showToast(`Synced ${count} video(s) to start.`, 'success');
+      } else {
+        showToast('Could not sync any videos.', 'error');
+      }
+    }
+
+    function toggleMuteAll() {
+      isMutedAll = !isMutedAll;
+      players.forEach((player) => {
+        try {
+          if (isMutedAll) {
+            player.mute();
+          } else {
+            player.unMute();
+          }
+        } catch { /* ignore */ }
+      });
+      muteAllBtn.textContent = isMutedAll ? '🔊 Unmute all' : '🔇 Mute all';
+      muteAllBtn.classList.toggle('toggle-active', isMutedAll);
+      saveState();
+      showToast(isMutedAll ? 'All videos muted.' : 'All videos unmuted.', 'info');
+    }
+
+    function clearAllVideos() {
+      if (videoIds.length === 0) {
+        showToast('Nothing to clear.', 'info');
+        return;
+      }
+      if (!confirm('Remove all videos from the wall?')) return;
+
+      players.forEach(p => { try { p.destroy(); } catch {} });
+      players.clear();
+      videoIds = [];
+      renderGrid();
+      saveState();
+      showToast('All videos removed.', 'info');
+    }
+
+    // ---------------------------------------------------------------
+    // 8. EVENT DELEGATION (grid actions)
+    // ---------------------------------------------------------------
+    videoGrid.addEventListener('click', (e) => {
+      const target = e.target.closest('button[data-action]');
+      if (!target) return;
+
+      const action = target.dataset.action;
+      const videoId = target.dataset.videoId;
+      if (!videoId) return;
+
+      if (action === 'toggle-play') {
+        togglePlayPause(videoId);
+      } else if (action === 'remove') {
+        removeVideo(videoId);
+      }
+    });
+
+    // ---------------------------------------------------------------
+    // 9. DEBOUNCED INPUT (optional, but keep for future use)
+    // ---------------------------------------------------------------
+    function debounce(fn, delay) {
+      let timer;
+      return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+      };
+    }
+
+    // not strictly needed, but we can use for validation feedback
+    const debouncedValidate = debounce(() => { /* placeholder */ }, 300);
+
+    // ---------------------------------------------------------------
+    // 10. BUTTON STATE MANAGEMENT
+    // ---------------------------------------------------------------
+    function updateButtonStates() {
+      const hasVideos = videoIds.length > 0;
+      syncPlayBtn.disabled = !hasVideos;
+      clearAllBtn.disabled = !hasVideos;
+      muteAllBtn.disabled = !hasVideos;
+      // update mute button label based on global state (but preserve toggle-active)
+      muteAllBtn.textContent = isMutedAll ? '🔊 Unmute all' : '🔇 Mute all';
+      muteAllBtn.classList.toggle('toggle-active', isMutedAll);
+    }
+
+    // ---------------------------------------------------------------
+    // 11. INITIALIZATION
+    // ---------------------------------------------------------------
+    function init() {
+      // load persisted state
+      const saved = loadState();
+      if (saved) {
+        videoIds = saved.videoIds || [];
+        isMutedAll = saved.isMutedAll || false;
+      }
+
+      // if no persisted state, start with a demo video (optional)
+      if (videoIds.length === 0 && !localStorage.getItem(STORAGE_KEY)) {
+        // add a couple of well-known videos as demo
+        videoIds = ['dQw4w9WgXcQ', '9bZkp7q19f0'];
+        isMutedAll = false;
+        saveState();
+      }
+
+      renderGrid();
+
+      // wire buttons
+      addBtn.addEventListener('click', addVideosFromInput);
+      syncPlayBtn.addEventListener('click', syncPlayAll);
+      muteAllBtn.addEventListener('click', toggleMuteAll);
+      clearAllBtn.addEventListener('click', clearAllVideos);
+
+      // allow Enter key in input to trigger add (but Ctrl+Enter for multiline)
+      urlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          addVideosFromInput();
+        }
+      });
+
+      // update mute button state after load
+      updateButtonStates();
+
+      // initial toast
+      if (videoIds.length > 0) {
+        showToast(`Loaded ${videoIds.length} video(s) from storage.`, 'info', 2000);
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // 12. YOUTUBE API LOADER (single load, then init)
+    // ---------------------------------------------------------------
+    (function loadYouTubeAPI() {
+      // if already loaded
+      if (window.YT && window.YT.Player) {
+        init();
+        return;
+      }
+
+      // inject script
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      tag.async = true;
+      tag.onerror = () => {
+        showToast('Failed to load YouTube IFrame API. Check your connection.', 'error', 6000);
+      };
+
+      // global callback for API ready
+      window.onYouTubeIframeAPIReady = function() {
+        init();
+      };
+
+      document.head.appendChild(tag);
+
+      // fallback if API doesn't call onYouTubeIframeAPIReady within 5s
+      setTimeout(() => {
+        if (!window.YT || !window.YT.Player) {
+          // maybe still not ready, but we can try to init anyway? better to show error
+          if (!document.querySelector('iframe[src*="youtube.com/embed"]')) {
+            showToast('YouTube API is taking long to load. Some features may be delayed.', 'info', 5000);
+          }
+        }
+      }, 5000);
+    })();
+
+    // Expose some functions for debugging (optional)
+    window.__videoWall = {
+      getVideoIds: () => [...videoIds],
+      getPlayers: () => players,
+      addVideo: (url) => {
+        const p = parseYouTubeUrl(url);
+        if (p && !videoIds.includes(p.videoId)) {
+          videoIds.push(p.videoId);
+          renderGrid();
+          saveState();
+          return true;
+        }
+        return false;
+      }
+    };
+  </script>
+</body>
+</html>
